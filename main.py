@@ -1,12 +1,14 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.openapi.utils import get_openapi
 from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
 from jwt.exceptions import InvalidTokenError
-from fastapi.openapi.utils import get_openapi
 
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import jwt
 import os
@@ -24,32 +26,112 @@ from schemas import (
 )
 
 
+# ---------------------------------------------------------------
+# PAPKALAR (to'liq yo'l bilan, server qayerdan ishga tushsa ham ishlaydi)
+# ---------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+# uploads papkasi bo'lmasa, o'zi yaratiladi (GitHub bo'sh papkani saqlamaydi)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+
+# ---------------------------------------------------------------
 # JWT SOZLAMALARI
+# ---------------------------------------------------------------
 SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_THIS_SECRET_KEY")
 ALGORITHM = "HS256"
 
+if SECRET_KEY == "CHANGE_THIS_SECRET_KEY":
+    print("OGOHLANTIRISH: SECRET_KEY o'rnatilmagan! Render'da Environment'ga qo'shing.")
 
+
+# ---------------------------------------------------------------
 # PAROL VA TOKEN SOZLAMALARI
+# ---------------------------------------------------------------
 password_hash = PasswordHash.recommended()
 oauth2_scheme = HTTPBearer()
 
 
+# ---------------------------------------------------------------
 # MA'LUMOTLAR BAZASI JADVALLARI
+# ---------------------------------------------------------------
 Base.metadata.create_all(bind=engine)
 
 
+# ---------------------------------------------------------------
 # FASTAPI
+# ---------------------------------------------------------------
 app = FastAPI(
     title="Real Estate Platform",
     description="Ko'chmas mulk e'lonlari sayti",
     version="1.0.0"
 )
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/frontend", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
+HAS_FRONTEND = os.path.isdir(FRONTEND_DIR)
+
+if HAS_FRONTEND:
+    app.mount(
+        "/frontend",
+        StaticFiles(directory=FRONTEND_DIR, html=True),
+        name="frontend"
+    )
+else:
+    print("OGOHLANTIRISH: 'frontend' papkasi topilmadi!")
 
 
+# ---------------------------------------------------------------
+# YORDAMCHI FUNKSIYALAR
+# ---------------------------------------------------------------
+ALLOWED_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp"
+}
+
+
+def get_property_images(property_id: int) -> list[str]:
+    """E'longa tegishli barcha rasmlar manzillarini qaytaradi."""
+    images = []
+
+    if os.path.isdir(UPLOADS_DIR):
+        for filename in sorted(os.listdir(UPLOADS_DIR)):
+            if filename.startswith(f"property_{property_id}_"):
+                images.append(f"/uploads/{filename}")
+
+    return images
+
+
+def delete_property_images(property_id: int) -> int:
+    """E'longa tegishli barcha rasmlarni o'chiradi, nechta o'chganini qaytaradi."""
+    deleted_count = 0
+
+    if os.path.isdir(UPLOADS_DIR):
+        for filename in os.listdir(UPLOADS_DIR):
+            if filename.startswith(f"property_{property_id}_"):
+                path = os.path.join(UPLOADS_DIR, filename)
+
+                if os.path.isfile(path):
+                    os.remove(path)
+                    deleted_count += 1
+
+    return deleted_count
+
+
+def build_property_response(item: Property) -> PropertyResponse:
+    """E'longa egasining telefoni va rasmlarini qo'shib qaytaradi."""
+    data = PropertyResponse.model_validate(item)
+    data.owner_phone = item.owner.phone if item.owner else None
+    data.images = get_property_images(item.id)
+    return data
+
+
+# ---------------------------------------------------------------
 # DATABASE ULANISH
+# ---------------------------------------------------------------
 def get_db():
     db = SessionLocal()
     try:
@@ -58,7 +140,9 @@ def get_db():
         db.close()
 
 
+# ---------------------------------------------------------------
 # TOKENNI TEKSHIRISH
+# ---------------------------------------------------------------
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -97,15 +181,22 @@ def get_current_user(
     return current_user
 
 
-# BOSH SAHIFA
-@app.get("/")
+# ---------------------------------------------------------------
+# BOSH SAHIFA: saytga yo'naltiradi
+# ---------------------------------------------------------------
+@app.get("/", include_in_schema=False)
 def home():
+    if HAS_FRONTEND:
+        return RedirectResponse(url="/frontend/")
+
     return {
         "message": "Real Estate loyihamiz ishga tushdi!"
     }
 
 
-# RO'YXATDAN O'TISH — TELEFON RAQAMI ORQALI
+# ---------------------------------------------------------------
+# RO'YXATDAN O'TISH: TELEFON RAQAMI ORQALI
+# ---------------------------------------------------------------
 @app.post("/register", response_model=UserResponse)
 def register_user(
     user: UserCreate,
@@ -135,7 +226,9 @@ def register_user(
     return new_user
 
 
-# LOGIN — TELEFON RAQAMI ORQALI
+# ---------------------------------------------------------------
+# LOGIN: TELEFON RAQAMI ORQALI
+# ---------------------------------------------------------------
 @app.post("/login")
 def login_user(
     user: UserLogin,
@@ -176,7 +269,9 @@ def login_user(
     }
 
 
+# ---------------------------------------------------------------
 # SHAXSIY KABINET
+# ---------------------------------------------------------------
 @app.get("/profile", response_model=UserResponse)
 def get_profile(
     current_user: User = Depends(get_current_user)
@@ -184,7 +279,9 @@ def get_profile(
     return current_user
 
 
+# ---------------------------------------------------------------
 # E'LON YARATISH
+# ---------------------------------------------------------------
 @app.post("/properties", response_model=PropertyResponse)
 def create_property(
     property_data: PropertyCreate,
@@ -200,10 +297,12 @@ def create_property(
     db.commit()
     db.refresh(new_property)
 
-    return new_property
+    return build_property_response(new_property)
 
 
+# ---------------------------------------------------------------
 # BARCHA E'LONLARNI RASMLARI BILAN KO'RISH
+# ---------------------------------------------------------------
 @app.get("/properties", response_model=list[PropertyResponse])
 def get_properties(
     db: Session = Depends(get_db)
@@ -212,26 +311,12 @@ def get_properties(
         Property.status == "active"
     ).order_by(Property.created_at.desc()).all()
 
-    result = []
-
-    for item in properties:
-        property_data = PropertyResponse.model_validate(item)
-        property_data.owner_phone = item.owner.phone if item.owner else None
-
-        image_files = []
-
-        if os.path.exists("uploads"):
-            for filename in os.listdir("uploads"):
-                if filename.startswith(f"property_{item.id}_"):
-                    image_files.append(f"/uploads/{filename}")
-
-        property_data.images = image_files
-        result.append(property_data)
-
-    return result
+    return [build_property_response(item) for item in properties]
 
 
-# MENING E'LONLARIM
+# ---------------------------------------------------------------
+# MENING E'LONLARIM (endi rasmlari va telefon bilan)
+# ---------------------------------------------------------------
 @app.get("/my-properties", response_model=list[PropertyResponse])
 def get_my_properties(
     current_user: User = Depends(get_current_user),
@@ -241,10 +326,12 @@ def get_my_properties(
         Property.user_id == current_user.id
     ).order_by(Property.created_at.desc()).all()
 
-    return properties
+    return [build_property_response(item) for item in properties]
 
 
+# ---------------------------------------------------------------
 # E'LONNI TAHRIRLASH
+# ---------------------------------------------------------------
 @app.put("/properties/{property_id}", response_model=PropertyResponse)
 def update_property(
     property_id: int,
@@ -271,10 +358,12 @@ def update_property(
     db.commit()
     db.refresh(property_item)
 
-    return property_item
+    return build_property_response(property_item)
 
 
-# E'LONNI O'CHIRISH
+# ---------------------------------------------------------------
+# E'LONNI O'CHIRISH (rasmlari ham o'chadi)
+# ---------------------------------------------------------------
 @app.delete("/properties/{property_id}")
 def delete_property(
     property_id: int,
@@ -295,12 +384,16 @@ def delete_property(
     db.delete(property_item)
     db.commit()
 
+    delete_property_images(property_id)
+
     return {
         "message": "E'lon muvaffaqiyatli o'chirildi!"
     }
 
 
+# ---------------------------------------------------------------
 # BITTA E'LONNI RASMLARI BILAN KO'RISH
+# ---------------------------------------------------------------
 @app.get("/properties/{property_id}", response_model=PropertyResponse)
 def get_property(
     property_id: int,
@@ -317,29 +410,19 @@ def get_property(
             detail="E'lon topilmadi!"
         )
 
-    property_data = PropertyResponse.model_validate(property_item)
-    property_data.owner_phone = property_item.owner.phone if property_item.owner else None
-
-    image_files = []
-
-    if os.path.exists("uploads"):
-        for filename in os.listdir("uploads"):
-            if filename.startswith(f"property_{property_id}_"):
-                image_files.append(f"/uploads/{filename}")
-
-    property_data.images = image_files
-
-    return property_data
+    return build_property_response(property_item)
 
 
-# E'LONLARNI QIDIRISH VA FILTRLASH
+# ---------------------------------------------------------------
+# E'LONLARNI QIDIRISH VA FILTRLASH (endi rasmlari va telefon bilan)
+# ---------------------------------------------------------------
 @app.get("/search-properties", response_model=list[PropertyResponse])
 def search_properties(
-    address: str = None,
-    listing_type: str = None,
-    min_price: float = None,
-    max_price: float = None,
-    rooms: int = None,
+    address: Optional[str] = None,
+    listing_type: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    rooms: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Property).filter(
@@ -371,12 +454,16 @@ def search_properties(
             Property.rooms == rooms
         )
 
-    return query.order_by(
+    properties = query.order_by(
         Property.created_at.desc()
     ).all()
 
+    return [build_property_response(item) for item in properties]
 
+
+# ---------------------------------------------------------------
 # E'LON RASMINI ALMASHTIRISH
+# ---------------------------------------------------------------
 @app.put("/properties/{property_id}/replace-image")
 def replace_property_image(
     property_id: int,
@@ -395,34 +482,24 @@ def replace_property_image(
             detail="E'lon topilmadi yoki sizga tegishli emas"
         )
 
-    allowed_types = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp"
-    }
-
-    if file.content_type not in allowed_types:
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=400,
             detail="Faqat JPG, PNG yoki WEBP rasm yuklash mumkin"
         )
 
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-    # SHU E'LONGA TEGISHLI ESKI RASMLARNI O'CHIRISH
-    for old_file in os.listdir("uploads"):
-        if old_file.startswith(f"property_{property_id}_"):
-            old_path = os.path.join("uploads", old_file)
-            if os.path.isfile(old_path):
-                os.remove(old_path)
+    # Shu e'longa tegishli eski rasmlarni o'chirish
+    delete_property_images(property_id)
 
-    # YANGI RASMNI SAQLASH
+    # Yangi rasmni saqlash
     filename = (
         f"property_{property_id}_{datetime.now().timestamp()}"
-        f"{allowed_types[file.content_type]}"
+        f"{ALLOWED_IMAGE_TYPES[file.content_type]}"
     )
 
-    file_path = os.path.join("uploads", filename)
+    file_path = os.path.join(UPLOADS_DIR, filename)
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -430,11 +507,13 @@ def replace_property_image(
     return {
         "message": "Rasm muvaffaqiyatli almashtirildi",
         "filename": filename,
-        "file_path": file_path
+        "file_path": f"/uploads/{filename}"
     }
 
 
+# ---------------------------------------------------------------
 # E'LON RASMINI O'CHIRISH
+# ---------------------------------------------------------------
 @app.delete("/properties/{property_id}/delete-image")
 def delete_property_image(
     property_id: int,
@@ -452,16 +531,7 @@ def delete_property_image(
             detail="E'lon topilmadi yoki sizga tegishli emas"
         )
 
-    deleted_count = 0
-
-    if os.path.exists("uploads"):
-        for filename in os.listdir("uploads"):
-            if filename.startswith(f"property_{property_id}_"):
-                file_path = os.path.join("uploads", filename)
-
-                if os.path.isfile(file_path):
-                    os.remove(file_path)
-                    deleted_count += 1
+    deleted_count = delete_property_images(property_id)
 
     if deleted_count == 0:
         raise HTTPException(
@@ -475,7 +545,9 @@ def delete_property_image(
     }
 
 
+# ---------------------------------------------------------------
 # E'LON UCHUN BIR NECHTA RASM YUKLASH
+# ---------------------------------------------------------------
 @app.post("/properties/{property_id}/upload-images")
 def upload_multiple_images(
     property_id: int,
@@ -500,20 +572,14 @@ def upload_multiple_images(
             detail="Bir martada ko'pi bilan 10 ta rasm yuklash mumkin"
         )
 
-    allowed_types = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp"
-    }
-
     for file in files:
-        if file.content_type not in allowed_types:
+        if file.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(
                 status_code=400,
                 detail="Faqat JPG, PNG yoki WEBP rasmlar mumkin"
             )
 
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
 
     uploaded_files = []
 
@@ -521,10 +587,10 @@ def upload_multiple_images(
         filename = (
             f"property_{property_id}_"
             f"{datetime.now().timestamp()}_{index}"
-            f"{allowed_types[file.content_type]}"
+            f"{ALLOWED_IMAGE_TYPES[file.content_type]}"
         )
 
-        file_path = os.path.join("uploads", filename)
+        file_path = os.path.join(UPLOADS_DIR, filename)
 
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -536,8 +602,11 @@ def upload_multiple_images(
         "uploaded_count": len(uploaded_files),
         "files": uploaded_files
     }
-    
+
+
+# ---------------------------------------------------------------
 # E'LON RASMLARINI TO'LIQ ALMASHTIRISH
+# ---------------------------------------------------------------
 @app.put("/properties/{property_id}/replace-images")
 def replace_property_images(
     property_id: int,
@@ -562,20 +631,14 @@ def replace_property_images(
             detail="1 tadan 10 tagacha rasm tanlang"
         )
 
-    allowed_types = {
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp"
-    }
-
     for file in files:
-        if file.content_type not in allowed_types:
+        if file.content_type not in ALLOWED_IMAGE_TYPES:
             raise HTTPException(
                 status_code=400,
                 detail="Faqat JPG, PNG yoki WEBP rasmlar mumkin"
             )
 
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
 
     uploaded_files = []
 
@@ -584,10 +647,10 @@ def replace_property_images(
             filename = (
                 f"property_{property_id}_"
                 f"{datetime.now().timestamp()}_{index}"
-                f"{allowed_types[file.content_type]}"
+                f"{ALLOWED_IMAGE_TYPES[file.content_type]}"
             )
 
-            file_path = os.path.join("uploads", filename)
+            file_path = os.path.join(UPLOADS_DIR, filename)
 
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
@@ -595,18 +658,19 @@ def replace_property_images(
             uploaded_files.append(filename)
 
         # Yangi rasmlar muvaffaqiyatli saqlangandan keyin eskilarini o'chirish
-        for filename in os.listdir("uploads"):
+        for filename in os.listdir(UPLOADS_DIR):
             if filename.startswith(f"property_{property_id}_"):
-                old_path = os.path.join("uploads", filename)
+                old_path = os.path.join(UPLOADS_DIR, filename)
 
                 if os.path.isfile(old_path) and filename not in uploaded_files:
                     os.remove(old_path)
 
     except Exception:
         for filename in uploaded_files:
-            path = os.path.join("uploads", filename)
+            path = os.path.join(UPLOADS_DIR, filename)
             if os.path.exists(path):
                 os.remove(path)
+
         raise HTTPException(
             status_code=500,
             detail="Rasmlarni almashtirishda xatolik yuz berdi"
@@ -619,8 +683,9 @@ def replace_property_images(
     }
 
 
-
+# ---------------------------------------------------------------
 # SWAGGER UCHUN RASMLARNI YUKLASH SOZLAMASI
+# ---------------------------------------------------------------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -632,20 +697,24 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    schema = openapi_schema["paths"][
-        "/properties/{property_id}/upload-images"
-    ]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]
+    try:
+        schema = openapi_schema["paths"][
+            "/properties/{property_id}/upload-images"
+        ]["post"]["requestBody"]["content"]["multipart/form-data"]["schema"]
 
-    schema_name = schema["$ref"].split("/")[-1]
+        schema_name = schema["$ref"].split("/")[-1]
 
-    openapi_schema["components"]["schemas"][schema_name]["properties"]["files"] = {
-        "type": "array",
-        "items": {
-            "type": "string",
-            "format": "binary"
-        },
-        "title": "Files"
-    }
+        openapi_schema["components"]["schemas"][schema_name]["properties"]["files"] = {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "format": "binary"
+            },
+            "title": "Files"
+        }
+    except (KeyError, TypeError):
+        # Swagger sozlamasi ishlamasa ham sayt to'xtab qolmasin
+        pass
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
