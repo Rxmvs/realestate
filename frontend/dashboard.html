@@ -1,0 +1,575 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shaxsiy kabinet</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6fa;
+    color: #172033;
+}
+
+header {
+    background: #142b52;
+    color: white;
+    padding: 18px 5%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+header a {
+    color: white;
+    text-decoration: none;
+}
+
+button {
+    border: 0;
+    padding: 11px 17px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.primary { background: #1769e0; color: white; }
+.danger { background: #dc3545; color: white; }
+.light { background: white; color: #142b52; }
+
+.container {
+    max-width: 1100px;
+    margin: 30px auto;
+    padding: 0 16px;
+}
+
+.panel {
+    background: white;
+    padding: 22px;
+    border-radius: 14px;
+    margin-bottom: 22px;
+    box-shadow: 0 3px 14px #0000000b;
+}
+
+input, select, textarea {
+    width: 100%;
+    padding: 12px;
+    margin: 7px 0 14px;
+    border: 1px solid #d5dce8;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+textarea { min-height: 90px; }
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.property {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 3px 12px #00000012;
+}
+
+.property img {
+    width: 100%;
+    height: 190px;
+    object-fit: cover;
+    background: #e8edf5;
+}
+
+.property-content { padding: 15px; }
+.property-content p { color: #657086; }
+
+.actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#message {
+    margin: 12px 0;
+    font-weight: bold;
+}
+
+.hidden { display: none; }
+
+@media (max-width: 600px) {
+    header { padding: 16px; }
+    .container { margin: 18px auto; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>Shaxsiy kabinet</h2>
+    <div class="actions">
+        <a href="/frontend/">Bosh sahifa</a>
+        <button class="danger" onclick="logout()">Chiqish</button>
+    </div>
+</header>
+
+<div class="container">
+
+    <section class="panel">
+        <h2>Profilim</h2>
+        <p><b>Ism:</b> <span id="userName">Yuklanmoqda...</span></p>
+        <p><b>Telefon:</b> <span id="userPhone">Yuklanmoqda...</span></p>
+    </section>
+
+    <section class="panel">
+        <h2>Yangi e’lon qo‘shish</h2>
+
+        <form id="propertyForm">
+            <label>E’lon sarlavhasi</label>
+            <input id="title" required placeholder="Masalan: 3 xonali zamonaviy kvartira">
+
+            <label>Tavsif</label>
+            <textarea id="description" placeholder="Uy haqida ma’lumot"></textarea>
+
+            <div class="grid">
+                <div>
+                    <label>Mulk turi</label>
+                    <select id="type" required>
+                        <option value="apartment">Kvartira</option>
+                        <option value="house">Hovli uy</option>
+                        <option value="land">Yer</option>
+                        <option value="commercial">Tijorat binosi</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>E’lon turi</label>
+                    <select id="listing_type" required>
+                        <option value="sale">Sotiladi</option>
+                        <option value="rent">Ijaraga beriladi</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Narxi</label>
+                    <input id="price" type="number" min="1" required>
+                </div>
+
+                <div>
+                    <label>Valyuta</label>
+                    <select id="currency">
+                        <option value="UZS">So‘m</option>
+                        <option value="USD">Dollar</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Xonalar soni</label>
+                    <input id="rooms" type="number" min="1">
+                </div>
+
+                <div>
+                    <label>Maydoni (m²)</label>
+                    <input id="area" type="number" min="1" step="0.1">
+                </div>
+
+                <div>
+                    <label>Qavat</label>
+                    <input id="floor" type="number" min="1">
+                </div>
+
+                <div>
+                    <label>Jami qavat</label>
+                    <input id="total_floors" type="number" min="1">
+                </div>
+            </div>
+
+            <label>Manzil</label>
+            <input id="address" required placeholder="Shahar, tuman, ko‘cha">
+
+            <label>Rasmlar (1 tadan 10 tagacha)</label>
+            <input id="images" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+
+            <button class="primary" type="submit">E’lonni joylashtirish</button>
+        </form>
+
+        <div id="message"></div>
+    </section>
+
+    <section class="panel">
+        <h2>Mening e’lonlarim</h2>
+        <div id="myProperties" class="grid">Yuklanmoqda...</div>
+    </section>
+
+</div>
+
+<script>
+const API = "";
+const token = localStorage.getItem("access_token");
+
+if (!token) {
+    alert("Avval tizimga kiring!");
+    window.location.href = "/frontend/";
+}
+
+const headers = {
+    "Authorization": "Bearer " + token
+};
+
+function showMessage(text, error = false) {
+    const el = document.getElementById("message");
+    el.textContent = text;
+    el.style.color = error ? "red" : "green";
+}
+
+async function loadProfile() {
+    try {
+        const response = await fetch(API + "/profile", {
+            headers
+        });
+
+        if (!response.ok) throw new Error();
+
+        const user = await response.json();
+        document.getElementById("userName").textContent = user.name || "";
+        document.getElementById("userPhone").textContent = user.phone || "";
+    } catch {
+        alert("Profilni yuklab bo‘lmadi. Qayta tizimga kiring.");
+        logout();
+    }
+}
+
+async function loadMyProperties() {
+    const container = document.getElementById("myProperties");
+
+    try {
+        const response = await fetch(API + "/my-properties", {
+            headers
+        });
+
+        if (!response.ok) {
+            container.textContent = "E’lonlarni yuklab bo‘lmadi.";
+            return;
+        }
+
+        const properties = await response.json();
+        container.innerHTML = "";
+
+        if (!properties.length) {
+            container.textContent = "Sizda hozircha e’lonlar mavjud emas.";
+            return;
+        }
+
+        properties.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "property";
+
+            const image = item.images && item.images.length
+                ? item.images[0]
+                : "";
+
+            card.innerHTML = `
+                ${image ? `<img src="${image}" alt="Uy rasmi">` : ""}
+                <div class="property-content">
+                    <h3>${escapeHTML(item.title)}</h3>
+                    <p>${Number(item.price).toLocaleString()} ${escapeHTML(item.currency || "")}</p>
+                    <p>${escapeHTML(item.address)}</p>
+                    <div class="actions">
+                       <button class="primary" onclick="openProperty(${item.id})">Ko‘rish</button>
+<button style="background:#f0ad20;color:white" onclick="editProperty(${item.id})">Tahrirlash</button>
+<button class="danger" onclick="deleteProperty(${item.id})">O‘chirish</button>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(card);
+        });
+
+    } catch {
+        container.textContent = "Server bilan bog‘lanishda xatolik.";
+    }
+}
+
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+
+
+async function editProperty(id) {
+    try {
+        const response = await fetch("/properties/" + id, { headers });
+
+        if (!response.ok) {
+            alert("E'lon ma'lumotlarini yuklab bo'lmadi!");
+            return;
+        }
+
+        const item = await response.json();
+
+        const title = prompt("E'lon sarlavhasi:", item.title);
+        if (title === null) return;
+
+        const description = prompt("Tavsif:", item.description || "");
+        if (description === null) return;
+
+        const price = prompt("Narxi:", item.price);
+        if (price === null) return;
+
+        const address = prompt("Manzil:", item.address);
+        if (address === null) return;
+
+        const rooms = prompt("Xonalar soni:", item.rooms || "");
+        if (rooms === null) return;
+
+        const area = prompt("Maydoni (m²):", item.area || "");
+        if (area === null) return;
+
+        const updateData = {
+            title: title.trim(),
+            description: description.trim() || null,
+            price: Number(price),
+            address: address.trim(),
+            rooms: rooms.trim() === "" ? null : Number(rooms),
+            area: area.trim() === "" ? null : Number(area)
+        };
+
+        if (
+            !updateData.title ||
+            !updateData.address ||
+            !Number.isFinite(updateData.price) ||
+            updateData.price <= 0 ||
+            (updateData.rooms !== null &&
+                (!Number.isInteger(updateData.rooms) || updateData.rooms < 1)) ||
+            (updateData.area !== null &&
+                (!Number.isFinite(updateData.area) || updateData.area <= 0))
+        ) {
+            alert("Ma'lumotlarni to'g'ri kiriting!");
+            return;
+        }
+
+        const saveResponse = await fetch("/properties/" + id, {
+            method: "PUT",
+            headers: {
+                ...headers,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(updateData)
+        });
+
+        const result = await saveResponse.json();
+
+        if (!saveResponse.ok) {
+            alert(result.detail || "Tahrirlashda xatolik!");
+            return;
+        }
+
+        alert("Ma'lumotlar yangilandi!");
+
+        // Rasm tanlash oynasini alohida ko'rsatish
+        const chooseImages = confirm(
+            "Endi rasmlarni ham almashtirmoqchimisiz?"
+        );
+
+        if (chooseImages) {
+            const fileInput = document.createElement("input");
+            fileInput.type = "file";
+            fileInput.accept = "image/jpeg,image/png,image/webp";
+            fileInput.multiple = true;
+
+            fileInput.onchange = async function() {
+                const files = Array.from(fileInput.files || []);
+
+                if (files.length === 0) return;
+
+                if (files.length > 10) {
+                    alert("Ko'pi bilan 10 ta rasm tanlang!");
+                    return;
+                }
+
+                const formData = new FormData();
+
+                files.forEach(file => {
+                    formData.append("files", file);
+                });
+
+                try {
+                    const uploadResponse = await fetch(
+                        "/properties/" + id + "/replace-images",
+                        {
+                            method: "PUT",
+                            headers,
+                            body: formData
+                        }
+                    );
+
+                    const uploadResult = await uploadResponse.json();
+
+                    if (!uploadResponse.ok) {
+                        alert(uploadResult.detail || "Rasmlar almashtirilmadi!");
+                        return;
+                    }
+
+                    alert("Rasmlar muvaffaqiyatli almashtirildi!");
+                    loadMyProperties();
+
+                } catch (error) {
+                    alert("Rasmlarni yuklashda xatolik!");
+                }
+            };
+
+            // Input sahifaga qo'shiladi va foydalanuvchi bosishi uchun ko'rinadi
+            fileInput.style.display = "block";
+            fileInput.style.margin = "15px 0";
+            fileInput.style.padding = "10px";
+            fileInput.style.background = "white";
+            fileInput.style.border = "1px solid #ccc";
+            fileInput.style.borderRadius = "8px";
+
+            const message = document.getElementById("message");
+            message.innerHTML = "";
+            message.appendChild(fileInput);
+
+            alert("Endi sahifadagi fayl tanlash maydonidan yangi rasmlarni tanlang.");
+        }
+
+        loadMyProperties();
+
+    } catch (error) {
+        alert("Server bilan bog'lanishda xatolik!");
+    }
+}
+
+
+
+function openProperty(id) {
+    window.location.href = "/frontend/property.html?id=" + id;
+}
+
+async function deleteProperty(id) {
+    if (!confirm("Bu e’lonni o‘chirmoqchimisiz?")) return;
+
+    try {
+        const response = await fetch(API + "/properties/" + id, {
+            method: "DELETE",
+            headers
+        });
+
+        if (!response.ok) {
+            alert("E’lonni o‘chirib bo‘lmadi.");
+            return;
+        }
+
+        alert("E’lon o‘chirildi.");
+        loadMyProperties();
+    } catch {
+        alert("Server bilan bog‘lanishda xatolik.");
+    }
+}
+
+document.getElementById("propertyForm").addEventListener("submit", async function(event) {
+    event.preventDefault();
+
+    showMessage("E’lon saqlanmoqda...");
+
+    const data = {
+        title: document.getElementById("title").value.trim(),
+        description: document.getElementById("description").value.trim() || null,
+        type: document.getElementById("type").value,
+        listing_type: document.getElementById("listing_type").value,
+        price: Number(document.getElementById("price").value),
+        currency: document.getElementById("currency").value,
+        rooms: optionalNumber("rooms"),
+        area: optionalNumber("area"),
+        floor: optionalNumber("floor"),
+        total_floors: optionalNumber("total_floors"),
+        address: document.getElementById("address").value.trim()
+    };
+
+    try {
+        const response = await fetch(API + "/properties", {
+            method: "POST",
+            headers: {
+                ...headers,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            showMessage(result.detail || "E’lon yaratilmadi.", true);
+            return;
+        }
+
+        const files = document.getElementById("images").files;
+
+        if (files.length > 10) {
+            showMessage("Ko‘pi bilan 10 ta rasm tanlang.", true);
+            return;
+        }
+
+        if (files.length > 0) {
+            const formData = new FormData();
+
+            for (const file of files) {
+                formData.append("files", file);
+            }
+
+            const uploadResponse = await fetch(
+                API + "/properties/" + result.id + "/upload-images",
+                {
+                    method: "POST",
+                    headers,
+                    body: formData
+                }
+            );
+
+            if (!uploadResponse.ok) {
+                showMessage("E’lon yaratildi, lekin rasmlar yuklanmadi.", true);
+                loadMyProperties();
+                return;
+            }
+        }
+
+        showMessage("E’lon muvaffaqiyatli joylashtirildi!");
+        document.getElementById("propertyForm").reset();
+        loadMyProperties();
+
+    } catch {
+        showMessage("Server bilan bog‘lanishda xatolik.", true);
+    }
+});
+
+function optionalNumber(id) {
+    const value = document.getElementById(id).value;
+    return value === "" ? null : Number(value);
+}
+
+function logout() {
+    localStorage.removeItem("access_token");
+    window.location.href = "/frontend/";
+}
+
+loadProfile();
+loadMyProperties();
+</script>
+
+</body>
+</html>

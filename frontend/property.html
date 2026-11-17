@@ -1,0 +1,191 @@
+
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E'lon tafsilotlari — Real Estate</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #172033;
+        }
+
+        header {
+            background: #101d35;
+            padding: 22px 7%;
+        }
+
+        header a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 35px auto;
+            padding: 0 20px;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        .gallery img {
+            width: 100%;
+            height: 260px;
+            object-fit: cover;
+            border-radius: 12px;
+        }
+
+        .details {
+            background: white;
+            padding: 25px;
+            border-radius: 14px;
+        }
+
+        h1 {
+            margin-bottom: 15px;
+        }
+
+        .price {
+            color: #0878c9;
+            font-size: 26px;
+            font-weight: bold;
+            margin: 18px 0;
+        }
+
+        .description {
+            margin-top: 20px;
+            line-height: 1.7;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #0878c9;
+            text-decoration: none;
+        }
+
+        #message {
+            padding: 20px;
+        }
+        .contact-button {
+    display: inline-block;
+    background: #087cff;
+    color: white;
+    padding: 14px 25px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 12px;
+    transition: 0.3s;
+}
+
+.contact-button:hover {
+    background: #0056b3;
+}
+    </style>
+</head>
+
+<body>
+
+<header>
+    <a href="/frontend/">← Real Estate bosh sahifa</a>
+</header>
+
+<main class="container">
+    <a class="back" href="/frontend/">← E'lonlarga qaytish</a>
+
+    <div id="message">E'lon yuklanmoqda...</div>
+    <div id="property"></div>
+</main>
+
+<script>
+    const API_URL = "http://127.0.0.1:8000";
+
+    const params = new URLSearchParams(window.location.search);
+    const propertyId = params.get("id");
+
+    async function loadProperty() {
+        const message = document.getElementById("message");
+        const container = document.getElementById("property");
+
+        if (!propertyId || !/^\d+$/.test(propertyId)) {
+            message.textContent = "E'lon raqami noto'g'ri.";
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `${API_URL}/properties/${propertyId}`
+            );
+
+            if (!response.ok) {
+                throw new Error("E'lon topilmadi");
+            }
+
+            const item = await response.json();
+
+            const images = item.images || [];
+
+            const gallery = images.length
+                ? images.map(img =>
+                    `<img src="${API_URL}${img}" alt="Uy rasmi">`
+                  ).join("")
+                : "<p>Rasmlar mavjud emas</p>";
+
+            container.innerHTML = `
+                <div class="gallery">${gallery}</div>
+
+                <div class="details">
+                    <h1>${item.title}</h1>
+                    <p>${item.address}</p>
+                    <p>Telefon: ${item.owner_phone || "Telefon raqami kiritilmagan"}</p>
+
+${item.owner_phone ? `
+    <a href="tel:${item.owner_phone}" class="contact-button">
+        📞 Qo‘ng‘iroq qilish
+    </a>
+` : ""}
+
+                    <div class="price">
+                        ${Number(item.price).toLocaleString("uz-UZ")}
+                        ${item.currency}
+                    </div>
+
+                    <p>Xonalar: ${item.rooms ?? "-"}</p>
+                    <p>Maydoni: ${item.area ?? "-"} m²</p>
+                    <p>Qavat: ${item.floor ?? "-"} / ${item.total_floors ?? "-"}</p>
+
+                    <div class="description">
+                        <h3>Tavsif</h3>
+                        <p>${item.description || "Tavsif kiritilmagan."}</p>
+                    </div>
+                </div>
+            `;
+
+            message.textContent = "";
+
+        } catch (error) {
+            message.textContent = "E'lonni yuklashda xatolik yuz berdi.";
+        }
+    }
+
+    loadProperty();
+</script>
+
+</body>
+</html>

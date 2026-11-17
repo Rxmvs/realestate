@@ -1,0 +1,459 @@
+```html
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Estate — Uy topish oson</title>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f7fb;
+            color: #172033;
+        }
+
+        header {
+            background: #101d35;
+            color: white;
+            padding: 20px 7%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        header h2 { color: #55c2ff; }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 12px 18px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .blue-btn {
+            background: #087cff;
+            color: white;
+        }
+
+        .gray-btn {
+            background: #64748b;
+            color: white;
+        }
+
+        .hero {
+            padding: 65px 7%;
+            background: linear-gradient(120deg, #10213f, #1765a0);
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 38px;
+            margin-bottom: 15px;
+        }
+
+        .hero p { color: #dcecff; }
+
+        .container { padding: 35px 7%; }
+
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 20px 0 25px;
+        }
+
+        .filters input,
+        .filters select {
+            flex: 1;
+            min-width: 145px;
+            padding: 13px;
+            border: 1px solid #d5dce8;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        #properties {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 22px;
+        }
+
+        .property {
+            background: white;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 4px 18px #00000012;
+            cursor: pointer;
+        }
+
+        .property img {
+            width: 100%;
+            height: 210px;
+            object-fit: cover;
+        }
+
+        .info { padding: 18px; }
+
+        .info h3 { margin-bottom: 10px; }
+
+        .price {
+            color: #0878c9;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 12px 0;
+        }
+
+        .error {
+            color: #c0392b;
+            padding: 15px;
+        }
+
+        footer {
+            background: #101d35;
+            color: white;
+            text-align: center;
+            padding: 22px;
+            margin-top: 40px;
+        }
+
+        #authOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #030c1eb3;
+            z-index: 999;
+        }
+
+        #authModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 420px;
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            z-index: 1000;
+        }
+
+        #authModal h2 { margin-bottom: 15px; }
+
+        #authModal input {
+            width: 100%;
+            padding: 13px;
+            margin: 8px 0;
+            border: 1px solid #d5dce8;
+            border-radius: 8px;
+        }
+
+        #authModal button {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .hidden { display: none !important; }
+
+        @media(max-width: 600px) {
+            header { padding: 18px 5%; }
+            .hero h1 { font-size: 29px; }
+            .container { padding: 25px 5%; }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h2>Real Estate</h2>
+
+    <nav>
+        <a href="/frontend/">Bosh sahifa</a>
+        <a href="#properties-section">E'lonlar</a>
+
+        <button id="cabinetButton" class="blue-btn hidden"
+            onclick="window.location.href='/frontend/dashboard.html'">
+            Shaxsiy kabinet
+        </button>
+
+        <span id="guestButtons">
+            <button class="blue-btn" onclick="showRegister()">Ro‘yxatdan o‘tish</button>
+            <button class="blue-btn" onclick="showLogin()">Kirish</button>
+        </span>
+    </nav>
+</header>
+
+<section class="hero">
+    <h1>Orzuingizdagi uyni toping!</h1>
+    <p>Sotuv va ijara uchun ko‘chmas mulk e'lonlari.</p>
+</section>
+
+<section class="container" id="properties-section">
+    <h2>So‘nggi e'lonlar</h2>
+
+    <div class="filters">
+        <input type="text" id="address" placeholder="Manzilni kiriting">
+
+        <select id="listing_type">
+            <option value="">Sotuv va ijara</option>
+            <option value="sale">Sotuv</option>
+            <option value="rent">Ijara</option>
+        </select>
+
+        <input type="number" id="min_price" placeholder="Min narx">
+        <input type="number" id="max_price" placeholder="Max narx">
+        <input type="number" id="rooms" placeholder="Xonalar soni">
+
+        <button class="blue-btn" onclick="searchProperties()">Qidirish</button>
+        <button class="gray-btn" onclick="clearSearch()">Tozalash</button>
+    </div>
+
+    <div id="properties">E'lonlar yuklanmoqda...</div>
+</section>
+
+<footer>
+    Real Estate Platform © 2026
+</footer>
+
+<div id="authOverlay" onclick="closeAuth()"></div>
+
+<div id="authModal">
+    <h2 id="authTitle">Kirish</h2>
+
+    <form id="registerForm" class="hidden">
+        <input id="regName" type="text" placeholder="Ism familiya" required minlength="2">
+        <input id="regPhone" type="tel" placeholder="Telefon raqam" required minlength="7">
+        <input id="regPassword" type="password" placeholder="Parol (kamida 8 ta belgi)" required minlength="8">
+        <button type="submit" class="blue-btn">Ro‘yxatdan o‘tish</button>
+    </form>
+
+    <form id="loginForm">
+        <input id="loginPhone" type="tel" placeholder="Telefon raqam" required minlength="7">
+        <input id="loginPassword" type="password" placeholder="Parol" required minlength="8">
+        <button type="submit" class="blue-btn">Kirish</button>
+    </form>
+
+    <button type="button" class="gray-btn" onclick="closeAuth()">Yopish</button>
+</div>
+
+<script>
+const API_URL = "http://127.0.0.1:8000";
+
+function showRegister() {
+    document.getElementById("authOverlay").style.display = "block";
+    document.getElementById("authModal").style.display = "block";
+    document.getElementById("authTitle").textContent = "Ro‘yxatdan o‘tish";
+    document.getElementById("registerForm").classList.remove("hidden");
+    document.getElementById("loginForm").classList.add("hidden");
+}
+
+function showLogin() {
+    document.getElementById("authOverlay").style.display = "block";
+    document.getElementById("authModal").style.display = "block";
+    document.getElementById("authTitle").textContent = "Kirish";
+    document.getElementById("registerForm").classList.add("hidden");
+    document.getElementById("loginForm").classList.remove("hidden");
+}
+
+function closeAuth() {
+    document.getElementById("authOverlay").style.display = "none";
+    document.getElementById("authModal").style.display = "none";
+}
+
+async function checkLogin() {
+    const token = localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    try {
+        const response = await fetch(`${API_URL}/profile`, {
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            document.getElementById("guestButtons").classList.add("hidden");
+            document.getElementById("cabinetButton").classList.remove("hidden");
+        } else {
+            localStorage.removeItem("access_token");
+        }
+    } catch (error) {
+        console.log("Profilni tekshirishda xatolik:", error);
+    }
+}
+
+document.getElementById("registerForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    try {
+        const response = await fetch(`${API_URL}/register`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                name: document.getElementById("regName").value.trim(),
+                phone: document.getElementById("regPhone").value.trim(),
+                password: document.getElementById("regPassword").value
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.detail || "Ro‘yxatdan o‘tishda xatolik!");
+            return;
+        }
+
+        alert("Ro‘yxatdan muvaffaqiyatli o‘tdingiz. Endi tizimga kiring.");
+
+        document.getElementById("loginPhone").value =
+            document.getElementById("regPhone").value.trim();
+
+        document.getElementById("registerForm").reset();
+        showLogin();
+
+    } catch (error) {
+        alert("Server bilan bog‘lanib bo‘lmadi!");
+    }
+});
+
+document.getElementById("loginForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    try {
+        const response = await fetch(`${API_URL}/login`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                phone: document.getElementById("loginPhone").value.trim(),
+                password: document.getElementById("loginPassword").value
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.detail || "Telefon raqami yoki parol noto‘g‘ri!");
+            return;
+        }
+
+        if (!result.access_token) {
+            alert("Serverdan kirish tokeni kelmadi.");
+            return;
+        }
+
+        localStorage.setItem("access_token", result.access_token);
+        closeAuth();
+        await checkLogin();
+        document.getElementById("loginForm").reset();
+
+        alert("Tizimga muvaffaqiyatli kirdingiz!");
+
+    } catch (error) {
+        alert("Server bilan bog‘lanib bo‘lmadi!");
+    }
+});
+
+async function loadProperties(url = `${API_URL}/properties`) {
+    const container = document.getElementById("properties");
+
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error();
+
+        const properties = await response.json();
+        container.innerHTML = "";
+
+        if (!properties.length) {
+            container.textContent = "Hozircha e'lonlar mavjud emas.";
+            return;
+        }
+
+        properties.forEach(item => {
+            const card = document.createElement("div");
+            card.className = "property";
+
+            card.addEventListener("click", () => {
+                window.location.href = `/frontend/property.html?id=${item.id}`;
+            });
+
+            const image = item.images && item.images.length
+                ? `${API_URL}${item.images[0]}`
+                : "";
+
+            card.innerHTML = `
+                ${image
+                    ? `<img src="${image}" alt="Uy rasmi">`
+                    : `<div style="height:210px;background:#e5eaf0;display:grid;place-items:center;">Rasm mavjud emas</div>`}
+                <div class="info">
+                    <h3>${item.title}</h3>
+                    <p>${item.address}</p>
+                    <div class="price">
+                        ${Number(item.price).toLocaleString("uz-UZ")} ${item.currency}
+                    </div>
+                    <p>${item.rooms ?? "-"} xona · ${item.area ?? "-"} m²</p>
+                </div>
+            `;
+
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+        container.innerHTML =
+            '<p class="error">E’lonlarni yuklab bo‘lmadi. Server ishlayotganini tekshiring.</p>';
+    }
+}
+
+async function searchProperties() {
+    const params = new URLSearchParams();
+
+    const address = document.getElementById("address").value.trim();
+    const listingType = document.getElementById("listing_type").value;
+    const minPrice = document.getElementById("min_price").value;
+    const maxPrice = document.getElementById("max_price").value;
+    const rooms = document.getElementById("rooms").value;
+
+    if (address) params.append("address", address);
+    if (listingType) params.append("listing_type", listingType);
+    if (minPrice) params.append("min_price", minPrice);
+    if (maxPrice) params.append("max_price", maxPrice);
+    if (rooms) params.append("rooms", rooms);
+
+    await loadProperties(`${API_URL}/search-properties?${params.toString()}`);
+}
+
+function clearSearch() {
+    document.getElementById("address").value = "";
+    document.getElementById("listing_type").value = "";
+    document.getElementById("min_price").value = "";
+    document.getElementById("max_price").value = "";
+    document.getElementById("rooms").value = "";
+    loadProperties();
+}
+
+loadProperties();
+checkLogin();
+</script>
+
+</body>
+</html>
+```
